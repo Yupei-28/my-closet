@@ -16,7 +16,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  // Keep the processed image as a Blob. Some iPhone Safari versions reject a
+  // File generated from a WASM image processor when it is put in FormData.
+  const [file, setFile] = useState<Blob | null>(null);
   const [preview, setPreview] = useState("");
   const [form, setForm] = useState({ name: "", category: "上装", material: "", seasons: "四季", style: "" });
   const [idea, setIdea] = useState({ title: "", mood: "", note: "" });
@@ -68,10 +70,9 @@ export default function Home() {
     try {
       const { removeBackground } = await import("@imgly/background-removal");
       const cutout = await removeBackground(selected);
-      const cleaned = new File([cutout], `${selected.name.replace(/\.[^/.]+$/, "")}.png`, { type: "image/png" });
       if (preview) URL.revokeObjectURL(preview);
-      setFile(cleaned);
-      setPreview(URL.createObjectURL(cleaned));
+      setFile(cutout);
+      setPreview(URL.createObjectURL(cutout));
     } catch {
       setError("自动抠图暂时没有完成，已保留原图，你仍可继续保存。");
     } finally { setIsRemovingBackground(false); }
@@ -83,11 +84,20 @@ export default function Home() {
   async function saveGarment() {
     if (!file) return;
     setUploading(true); setError("");
-    // Supply a simple, fixed filename.  iOS Safari can reject a generated
-    // filename when a processed image is appended to FormData.
-    const body = new FormData(); body.append("image", file, "garment.png"); Object.entries(form).forEach(([key, value]) => body.append(key, value));
     try {
-      const response = await fetch("/api/garments", { method: "POST", body }); const result: any = await response.json();
+      // Send raw image bytes rather than multipart FormData. This avoids an
+      // iPhone Safari incompatibility with a File created after background removal.
+      const bytes = await file.arrayBuffer();
+      if (!bytes.byteLength) throw new Error("图片处理结果为空，请重新选择照片。");
+      const response = await fetch("/api/garments", {
+        method: "POST",
+        headers: {
+          "content-type": file.type || "image/png",
+          "x-closet-meta": encodeURIComponent(JSON.stringify(form)),
+        },
+        body: bytes,
+      });
+      const result: any = await response.json();
       if (!response.ok) throw new Error(result.error || "保存失败");
       setGarments((current) => [result.garment, ...current]); closeSheet();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "保存失败，请再试一次。"); }
