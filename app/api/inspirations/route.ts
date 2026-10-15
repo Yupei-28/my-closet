@@ -29,10 +29,21 @@ export async function GET() {
 export async function POST(request: Request) {
   if (!(await hasClosetAccess())) return Response.json({ error: "未授权" }, { status: 401 });
   try {
-    const mime = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    const requestType = request.headers.get("content-type") || "";
+    let mime = requestType.split(";")[0].trim().toLowerCase();
+    let season = String(request.headers.get("x-inspiration-season") || "四季").slice(0, 30);
+    let bytes: ArrayBuffer;
+    if (requestType.startsWith("multipart/form-data")) {
+      const form = await request.formData();
+      const image = form.get("image");
+      if (!(image instanceof File)) return Response.json({ error: "请选择一张图片。" }, { status: 400 });
+      mime = image.type || "image/jpeg";
+      season = String(form.get("season") || "四季").slice(0, 30);
+      bytes = await image.arrayBuffer();
+    } else {
+      bytes = await request.arrayBuffer();
+    }
     if (!mime.startsWith("image/")) return Response.json({ error: "请选择一张图片。" }, { status: 400 });
-    const season = String(request.headers.get("x-inspiration-season") || "四季").slice(0, 30);
-    const bytes = await request.arrayBuffer();
     if (!bytes.byteLength) return Response.json({ error: "图片为空，请重新选择。" }, { status: 400 });
     if (bytes.byteLength > 10 * 1024 * 1024) return Response.json({ error: "图片请控制在 10MB 以内。" }, { status: 400 });
     const id = crypto.randomUUID();
