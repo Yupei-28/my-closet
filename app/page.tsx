@@ -8,6 +8,32 @@ type Look = { id: string; title: string; mood: string; note: string };
 const categories = ["上装", "下装", "裙装", "外套", "鞋履", "包袋", "配饰"];
 const seasons = ["春", "夏", "秋", "冬", "四季"];
 
+// The background-removal library returns a temporary Blob. On some iPhones
+// Safari can preview that Blob but cannot read it again for upload. Redrawing
+// it through a canvas produces an ordinary, portable PNG while keeping alpha.
+async function makePortablePng(source: Blob): Promise<Blob> {
+  const sourceUrl = URL.createObjectURL(source);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("图片无法处理"));
+      element.src = sourceUrl;
+    });
+    const longestSide = 1800;
+    const scale = Math.min(1, longestSide / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("图片无法处理");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error("图片无法处理")), "image/png"));
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
 export default function Home() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [section, setSection] = useState<"closet" | "ideas">("closet");
@@ -70,9 +96,10 @@ export default function Home() {
     try {
       const { removeBackground } = await import("@imgly/background-removal");
       const cutout = await removeBackground(selected);
+      const portablePng = await makePortablePng(cutout);
       if (preview) URL.revokeObjectURL(preview);
-      setFile(cutout);
-      setPreview(URL.createObjectURL(cutout));
+      setFile(portablePng);
+      setPreview(URL.createObjectURL(portablePng));
     } catch {
       setError("自动抠图暂时没有完成，已保留原图，你仍可继续保存。");
     } finally { setIsRemovingBackground(false); }
