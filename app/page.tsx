@@ -43,6 +43,30 @@ async function makePortablePng(source: Blob): Promise<Blob> {
   }
 }
 
+// Crop first, then remove the background. This prevents unrelated objects at
+// the edge of a photo from being treated as part of the garment.
+async function cropForGarment(source: Blob, scaleMultiplier: number, offsetX: number, offsetY: number): Promise<Blob> {
+  const sourceUrl = URL.createObjectURL(source);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("图片无法处理"));
+      element.src = sourceUrl;
+    });
+    const width = 1200, height = 1500;
+    const canvas = document.createElement("canvas");
+    canvas.width = width; canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("图片无法处理");
+    const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight) * scaleMultiplier;
+    const renderedWidth = image.naturalWidth * scale;
+    const renderedHeight = image.naturalHeight * scale;
+    context.drawImage(image, (width - renderedWidth) / 2 + offsetX * width / 100, (height - renderedHeight) / 2 + offsetY * height / 100, renderedWidth, renderedHeight);
+    return await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error("图片无法处理")), "image/jpeg", .92));
+  } finally { URL.revokeObjectURL(sourceUrl); }
+}
+
 export default function Home() {
   const fileInput = useRef<HTMLInputElement>(null);
   const inspirationInput = useRef<HTMLInputElement>(null);
@@ -57,6 +81,8 @@ export default function Home() {
   // Keep the processed image as a Blob. Some iPhone Safari versions reject a
   // File generated from a WASM image processor when it is put in FormData.
   const [file, setFile] = useState<Blob | null>(null);
+  const [cropSource, setCropSource] = useState<Blob | null>(null);
+  const [crop, setCrop] = useState({ scale: 1, offsetX: 0, offsetY: 0 });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [preview, setPreview] = useState("");
   const [form, setForm] = useState({ name: "", category: "上装", material: "", seasons: ["四季"], style: "", imageScale: 1, imageOffsetX: 0, imageOffsetY: 0 });
@@ -108,23 +134,34 @@ export default function Home() {
   async function chooseFile(selected?: File) {
     if (!selected) return;
     if (!selected.type.startsWith("image/")) { setError("请选择一张图片。"); return; }
-    setError(""); setFile(selected); setPreview(URL.createObjectURL(selected));
+    if (preview) URL.revokeObjectURL(preview);
+    setError(""); setFile(null); setCropSource(selected); setCrop({ scale: 1, offsetX: 0, offsetY: 0 }); setPreview(URL.createObjectURL(selected));
     setForm((current) => ({ ...current, name: current.name || selected.name.replace(/\.[^/.]+$/, "") }));
+  }
+  async function applyCropAndRemoveBackground() {
+    if (!cropSource) return;
     setIsRemovingBackground(true);
     try {
       const { removeBackground } = await import("@imgly/background-removal");
-      const cutout = await removeBackground(selected);
+      const cropped = await cropForGarment(cropSource, crop.scale, crop.offsetX, crop.offsetY);
+      const cutout = await removeBackground(cropped);
       const portablePng = await makePortablePng(cutout);
       if (preview) URL.revokeObjectURL(preview);
       setFile(portablePng);
       setPreview(URL.createObjectURL(portablePng));
+      setCropSource(null);
     } catch {
-      setError("自动抠图暂时没有完成，已保留原图，你仍可继续保存。");
+      try {
+        const cropped = await cropForGarment(cropSource, crop.scale, crop.offsetX, crop.offsetY);
+        if (preview) URL.revokeObjectURL(preview);
+        setFile(cropped); setPreview(URL.createObjectURL(cropped)); setCropSource(null);
+        setError("自动抠图暂时没有完成，已保留裁剪后的原图，你仍可继续保存。");
+      } catch { setError("图片裁剪暂时没有完成，请重新选择照片。"); }
     } finally { setIsRemovingBackground(false); }
   }
   function closeSheet() {
     if (preview) URL.revokeObjectURL(preview);
-    setPreview(""); setFile(null); setEditingId(null); setForm({ name: "", category: "上装", material: "", seasons: ["四季"], style: "", imageScale: 1, imageOffsetX: 0, imageOffsetY: 0 });
+    setPreview(""); setFile(null); setCropSource(null); setCrop({ scale: 1, offsetX: 0, offsetY: 0 }); setEditingId(null); setForm({ name: "", category: "上装", material: "", seasons: ["四季"], style: "", imageScale: 1, imageOffsetX: 0, imageOffsetY: 0 });
   }
   function beginEdit(garment: Garment) {
     setEditingId(garment.id); setPreview(garment.imageUrl); setFile(new Blob([], { type: "image/png" }));
@@ -206,6 +243,8 @@ export default function Home() {
 
   if (!accessChecked) return <main className="grid min-h-dvh place-items-center bg-[#f7f4ee] text-[#766f66]"><LoaderCircle className="animate-spin" /></main>;
   if (!authorized) return <main className="grid min-h-dvh place-items-center bg-[#f7f4ee] px-5 text-[#25221f]"><section className="w-full max-w-sm rounded-[32px] bg-white p-7 shadow-[0_18px_50px_rgba(62,48,37,0.08)]"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#34312e] text-white"><Shirt size={22} /></div><p className="mt-6 text-xs font-semibold tracking-[0.18em] text-[#766f66]">MY PRIVATE CLOSET</p><h1 className="mt-2 font-serif text-3xl">进入我的衣橱</h1><p className="mt-3 text-sm leading-6 text-[#766f66]">输入你在 Vercel 设置的专属访问码。照片与灵感仅会保存在你的私有存储中。</p>{error && <p className="mt-4 rounded-xl bg-[#fff2ee] p-3 text-sm text-[#9a4433]">{error}</p>}<input value={accessCode} onChange={(event) => setAccessCode(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void unlock(); }} type="password" placeholder="输入访问码" className="mt-6 w-full rounded-xl border border-[#d8d0c5] bg-[#f7f4ee] px-4 py-3 outline-none"/><button onClick={() => void unlock()} className="mt-3 w-full rounded-xl bg-[#34312e] px-4 py-3 font-medium text-white">进入衣橱</button></section></main>;
+
+  if (cropSource) return <main className="closet-app grid min-h-dvh place-items-center px-5 py-6"><section className="w-full max-w-md rounded-[30px] bg-[#fffaf7] p-5 shadow-[0_12px_28px_rgba(89,79,71,.2)]"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold tracking-[.18em] text-[#9a918b]">NEW GARMENT · STEP 1 / 2</p><h1 className="mt-2 font-serif text-3xl text-[#5f6677]">裁剪照片</h1><p className="mt-2 text-sm leading-6 text-[#766f66]">先把衣服放进取景框，边缘的杂物会在下一步抠图前被裁掉。</p></div><button onClick={closeSheet} aria-label="取消裁剪" className="grid h-10 w-10 place-items-center rounded-full bg-[#f2ece2] text-[#665f58]"><X size={19} /></button></div><div className="mt-5 aspect-[4/5] overflow-hidden rounded-[24px] bg-[#f2ece2]"><img src={preview} alt="裁剪预览" className="h-full w-full object-cover" style={{ transform: `translate(${crop.offsetX}%, ${crop.offsetY}%) scale(${crop.scale})` }} /></div><div className="mt-5 rounded-2xl bg-[#f2ece2] p-4"><label className="block text-sm font-medium text-[#5f5a58]">放大裁剪 {Math.round(crop.scale * 100)}%<input type="range" min="1" max="2.5" step="0.01" value={crop.scale} onChange={(event) => setCrop({ ...crop, scale: Number(event.target.value) })} className="mt-2 w-full accent-[#c78276]" /></label><div className="mt-3 grid grid-cols-2 gap-4"><label className="block text-xs text-[#665f58]">左右 {crop.offsetX}%<input type="range" min="-35" max="35" step="1" value={crop.offsetX} onChange={(event) => setCrop({ ...crop, offsetX: Number(event.target.value) })} className="mt-1 w-full accent-[#c78276]" /></label><label className="block text-xs text-[#665f58]">上下 {crop.offsetY}%<input type="range" min="-35" max="35" step="1" value={crop.offsetY} onChange={(event) => setCrop({ ...crop, offsetY: Number(event.target.value) })} className="mt-1 w-full accent-[#c78276]" /></label></div></div><button disabled={isRemovingBackground} onClick={() => void applyCropAndRemoveBackground()} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#aeb8cc] px-4 py-3.5 font-medium text-white shadow-[0_4px_0_#8e99ae] disabled:opacity-60">{isRemovingBackground ? <LoaderCircle className="animate-spin" size={18} /> : <Sparkles size={18} />}{isRemovingBackground ? "正在裁剪并抠图" : "使用此取景并开始抠图"}</button></section></main>;
 
   const toggleSeason = (season: string) => setForm((current) => {
     if (season === "四季") return { ...current, seasons: ["四季"] };
