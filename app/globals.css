@@ -135,3 +135,68 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* The private wardrobe uses the same quiet scrapbook language as the public
+   demo: warm paper, blue-grey ink and softly lifted menu-like cards. */
+.closet-app {
+  background-color: #e8dfd0 !important;
+  background-image: radial-gradient(rgba(148, 125, 98, .11) 1px, transparent 1px) !important;
+  background-size: 13px 13px !important;
+  color: #5f5a58;
+}
+
+.closet-shell {
+  min-height: 100dvh;
+  max-width: 640px !important;
+  background: rgba(248, 243, 235, .94);
+  box-shadow: 0 0 55px rgba(83, 69, 56, .2);
+}
+
+.closet-header {
+  position: relative;
+  overflow: hidden;
+  padding: 1.7rem;
+  border-radius: 30px;
+  background: rgba(255, 250, 247, .86);
+  box-shadow: 0 10px 25px rgba(117, 97, 78, .13);
+}
+
+.closet-header::after {
+  position: absolute;
+  right: -1.75rem;
+  top: -2rem;
+  width: 7rem;
+  height: 7rem;
+  border-radius: 999px;
+  background: rgba(220, 227, 239, .8);
+  content: "";
+}
+
+.closet-header > * { position: relative; z-index: 1; }
+.closet-header h1 { color: #5f6677; }
+.closet-header > div { background: #aeb8cc !important; box-shadow: 0 4px 0 #8e99ae; }
+
+.closet-app section > div.rounded-\[28px\],
+.closet-app article,
+.closet-app .rounded-\[28px\].bg-white,
+.closet-app .rounded-\[24px\].bg-white,
+.closet-app .rounded-\[22px\].bg-white {
+  background-color: rgba(255, 250, 247, .82) !important;
+  box-shadow: 0 8px 20px rgba(117, 97, 78, .13) !important;
+}
+
+.closet-app .bg-\[\#eee8de\],
+.closet-app .bg-\[\#eee9e0\],
+.closet-app .bg-\[\#e9e3d8\] {
+  background-color: #f1ebe2 !important;
+}
+
+.closet-app .bg-\[\#34312e\] { background-color: #aeb8cc !important; }
+.closet-app .bg-\[\#b8624e\] { background-color: #c78276 !important; }
+.closet-app .text-\[\#b8624e\] { color: #a36e69 !important; }
+
+.closet-app nav {
+  background: rgba(255, 250, 247, .94) !important;
+  border-color: rgba(255, 255, 255, .85) !important;
+  box-shadow: 0 12px 28px rgba(89, 79, 71, .24) !important;
+}
