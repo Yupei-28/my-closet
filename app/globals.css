@@ -174,6 +174,7 @@ body {
 
 .closet-header > * { position: relative; z-index: 1; }
 .closet-header h1 { color: #5f6677; }
+.closet-title { text-shadow: none !important; box-shadow: none !important; filter: none !important; }
 .closet-header > div { background: #aeb8cc !important; box-shadow: 0 4px 0 #8e99ae; }
 
 .closet-app section > div.rounded-\[28px\],
@@ -199,4 +200,36 @@ body {
   background: rgba(255, 250, 247, .94) !important;
   border-color: rgba(255, 255, 255, .85) !important;
   box-shadow: 0 12px 28px rgba(89, 79, 71, .24) !important;
+}
+
+.closet-app .garment-photo {
+  background: #e8eef4 !important;
+  border-bottom: 1px solid rgba(111, 127, 150, .14);
+}
+
+.outfit-board,
+.outfit-saved-board {
+  display: grid;
+  grid-template-columns: minmax(72px, .72fr) minmax(112px, 1fr) minmax(48px, .36fr);
+  grid-template-rows: 76px 138px 138px 74px;
+  gap: .55rem;
+}
+
+.outfit-board-head { grid-column: 2; grid-row: 1; width: 76px; justify-self: center; }
+.outfit-board-outer { grid-column: 1; grid-row: 2 / span 2; }
+.outfit-board-top { grid-column: 2; grid-row: 2; }
+.outfit-board-bottom { grid-column: 2; grid-row: 3; }
+.outfit-board-shoes { grid-column: 2; grid-row: 4; width: 112px; justify-self: center; }
+
+.outfit-saved-board {
+  min-height: 236px;
+  padding: .55rem;
+  border-radius: 18px;
+  background: #f1ebe2;
+}
+
+.outfit-saved-slot {
+  overflow: hidden;
+  border-radius: 13px;
+  background: rgba(255, 250, 247, .65);
 }
